@@ -43,6 +43,8 @@ class Vacancy:
     experience: str | None
     work_formats: list[str]
     internship: bool
+    area_id: str | None = None
+    area_path: str = ""
     search_names: list[str] = field(default_factory=list)
     search_ids: list[int] = field(default_factory=list)
 

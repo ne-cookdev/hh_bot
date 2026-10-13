@@ -24,7 +24,7 @@ from app.catalog import (
 from app.config import Config
 from app.db import Database
 from app.format import browse_html, browse_window, esc, salary_filter_label, search_html
-from app.hh import HhClient, HhError, HhRateLimit
+from app.hh import HhClient, HhError, HhRateLimit, matches_area
 from app.keyboards import (
     area_hits_kb,
     area_kb,
@@ -606,7 +606,7 @@ def setup(ctx: Ctx) -> Router:
                 await status.edit_text("hh сейчас не ответил. Попробуй через минуту.")
                 return
         shown, pages = browse_window(
-            result.vacancies,
+            [item for item in result.vacancies if matches_area(item, search.area_id)],
             page,
             page_size=BROWSE_PAGE,
             fetch_size=BROWSE_FETCH,

@@ -44,5 +44,5 @@ class Config:
             poll_interval=_int("POLL_INTERVAL", 40, 15),
             hh_min_interval=_float("HH_MIN_INTERVAL", 1.0, 0.4),
             lookback_minutes=_int("LOOKBACK_MINUTES", 5, 1),
-            catchup_minutes=_int("CATCHUP_MINUTES", 30, 5),
+            catchup_minutes=_int("CATCHUP_MINUTES", 24 * 60, 5),
         )

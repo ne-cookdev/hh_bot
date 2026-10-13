@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.config import Config
 from app.db import Database
-from app.hh import HhClient, HhError, HhRateLimit
+from app.hh import HhClient, HhError, HhRateLimit, matches_area
 from app.models import QuerySpec, Search
 from app.notifier import Notifier
 from app.query import apply_exclusions
@@ -18,11 +18,15 @@ _MAX_PAGES = 3
 
 
 def cutoff_for(search: Search, now: datetime, cfg: Config) -> datetime:
-    if search.last_polled_at is None:
-        return search.created_at - timedelta(minutes=cfg.lookback_minutes)
-    back = search.last_polled_at - timedelta(seconds=90)
-    floor = now - timedelta(minutes=cfg.catchup_minutes)
-    return max(back, floor)
+    """How old a vacancy can be and still be new to this search.
+
+    hh often shows a vacancy in search later than publicationTime, and the bot
+    may have been down. Id dedup stops a resend, so the window stays wide:
+    not earlier than the search itself, and not older than catchup.
+    """
+    since_created = search.created_at - timedelta(minutes=cfg.lookback_minutes)
+    earliest = now - timedelta(minutes=cfg.catchup_minutes)
+    return max(since_created, earliest)
 
 
 async def run_poller(
@@ -85,6 +89,8 @@ async def poll_once(db: Database, hh: HhClient, notifier: Notifier, cfg: Config)
         for search in group:
             border = cutoff_for(search, now, cfg)
             for vacancy in vacancies:
+                if not matches_area(vacancy, search.area_id):
+                    continue
                 if vacancy.published_at < border:
                     continue
                 if await db.enqueue(search.user_id, search.id, vacancy):
@@ -101,7 +107,8 @@ async def _collect(hh: HhClient, spec: QuerySpec, cutoff: datetime) -> list:
         if not result.vacancies:
             break
         found.extend(result.vacancies)
-        oldest = min(item.published_at for item in result.vacancies)
-        if oldest < cutoff or len(result.vacancies) < _PAGE or page + 1 >= result.pages:
+        newest = max(item.published_at for item in result.vacancies)
+        # An old card on an otherwise fresh page must not hide the next page.
+        if newest < cutoff or len(result.vacancies) < _PAGE or page + 1 >= result.pages:
             break
     return found

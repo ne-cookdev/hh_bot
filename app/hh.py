@@ -263,6 +263,16 @@ def parse_search_html(page: str) -> SearchResult:
     return SearchResult(vacancies=vacancies, page=current, pages=pages)
 
 
+def matches_area(vacancy: Vacancy, area_id: str | None) -> bool:
+    """hh puts other cities into an area search. Path is the parent chain, `.113.232.1.`."""
+    if not area_id:
+        return True
+    wanted = str(area_id)
+    if vacancy.area_id == wanted:
+        return True
+    return wanted in [part for part in vacancy.area_path.split(".") if part]
+
+
 def _page_index(value: object) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int):
         return None
@@ -301,6 +311,9 @@ def _vacancy(item: dict) -> Vacancy | None:
     company = item.get("company") or {}
     employer = (company.get("visibleName") or company.get("name") or "Работодатель скрыт").strip()
     area = item.get("area") or {}
+    area_id = area.get("@id")
+    if area_id is None:
+        area_id = area.get("id")
     links = item.get("links") or {}
     url = links.get("desktop") or f"https://hh.ru/vacancy/{item['vacancyId']}"
     salary_from, salary_to, currency, gross, mode = _salary(item.get("compensation") or {})
@@ -309,6 +322,8 @@ def _vacancy(item: dict) -> Vacancy | None:
         name=str(item.get("name") or "Вакансия").strip(),
         employer=employer,
         area=str(area.get("name") or "").strip() or "—",
+        area_id=None if area_id is None or area_id == "" else str(area_id),
+        area_path=str(area.get("path") or ""),
         salary_from=salary_from,
         salary_to=salary_to,
         salary_currency=currency,
